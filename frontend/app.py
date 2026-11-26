@@ -60,25 +60,60 @@ except Exception:  # noqa: BLE001
 # ------------------------------------------------------------ barra lateral
 st.sidebar.header("⚙️ Configuración")
 st.sidebar.subheader("Random Forest (sin búsqueda)")
-n_estimators = st.sidebar.slider("n_estimators", 10, 1000, 10, 10)
-max_depth_on = st.sidebar.checkbox("Limitar profundidad máxima", value=False)
-max_depth = st.sidebar.slider("max_depth", 2, 50, 10) if max_depth_on else None
-min_samples_split = st.sidebar.slider("min_samples_split", 2, 50, 4)
-min_samples_leaf = st.sidebar.slider("min_samples_leaf", 1, 50, 2)
+n_estimators = st.sidebar.slider(
+    "n_estimators", 10, 1000, 10, 10,
+    help="Número de árboles del bosque. Más árboles dan predicciones más estables, "
+         "pero tardan más en entrenar.")
+max_depth_on = st.sidebar.checkbox(
+    "Limitar profundidad máxima", value=False,
+    help="Si se activa, se limita la profundidad máxima de cada árbol; ayuda a evitar "
+         "sobreajuste.")
+max_depth = st.sidebar.slider(
+    "max_depth", 2, 50, 10,
+    help="Profundidad máxima de los árboles. Valores bajos simplifican el modelo; valores "
+         "altos capturan más detalle (riesgo de sobreajuste).") if max_depth_on else None
+min_samples_split = st.sidebar.slider(
+    "min_samples_split", 2, 50, 4,
+    help="Mínimo de muestras para dividir un nodo. Aumentarlo hace el modelo más "
+         "conservador y reduce el sobreajuste.")
+min_samples_leaf = st.sidebar.slider(
+    "min_samples_leaf", 1, 50, 2,
+    help="Mínimo de muestras por hoja. Aumentarlo suaviza las predicciones y reduce el "
+         "sobreajuste.")
 _mf = {"sqrt": "sqrt", "log2": "log2", "0.5": 0.5, "todas (None)": None}
-max_features = _mf[st.sidebar.selectbox("max_features", list(_mf), index=0)]
+max_features = _mf[st.sidebar.selectbox(
+    "max_features", list(_mf), index=0,
+    help="Variables consideradas en cada división. 'sqrt' es un buen valor por defecto; "
+         "valores menores reducen la correlación entre árboles.")]
 
 st.sidebar.subheader("Partición y validación")
-test_size = st.sidebar.slider("Tamaño del conjunto de prueba", 0.05, 0.5, 0.25, 0.05)
-n_splits = st.sidebar.slider("Folds de validación cruzada", 2, 10, 3)
-random_state = int(st.sidebar.number_input("random_state", 0, 10_000, 42))
+test_size = st.sidebar.slider(
+    "Tamaño del conjunto de prueba", 0.05, 0.5, 0.25, 0.05,
+    help="Proporción de datos reservada para el conjunto de prueba. Un valor mayor da una "
+         "evaluación más fiable, pero deja menos datos para entrenar.")
+n_splits = st.sidebar.slider(
+    "Folds de validación cruzada", 2, 10, 3,
+    help="Número de particiones de la validación cruzada. Más folds dan una estimación más "
+         "fiable, pero el entrenamiento es más lento.")
+random_state = int(st.sidebar.number_input(
+    "random_state", 0, 10_000, 42,
+    help="Semilla aleatoria. Fijarla permite reproducir exactamente los mismos resultados."))
 
 st.sidebar.subheader("Variables categóricas")
-umbral_card = st.sidebar.slider("Alta cardinalidad: más de N categorías", 5, 200, 30)
-modo_card_ui = st.sidebar.radio("Tratamiento de alta cardinalidad",
-                                ["Agrupar categorías raras en 'otros'", "Excluir esas columnas"])
+umbral_card = st.sidebar.slider(
+    "Alta cardinalidad: más de N categorías", 5, 200, 30,
+    help="A partir de cuántos valores únicos una columna categórica se considera de alta "
+         "cardinalidad.")
+modo_card_ui = st.sidebar.radio(
+    "Tratamiento de alta cardinalidad",
+    ["Agrupar categorías raras en 'otros'", "Excluir esas columnas"],
+    help="Qué hacer con las columnas categóricas de alta cardinalidad: agrupar las "
+         "categorías raras en 'otros' o excluirlas del entrenamiento.")
 modo_card = "excluir" if modo_card_ui.startswith("Excluir") else "agrupar"
-top_n = st.sidebar.slider("Categorías a conservar (el resto → 'otros')", 5, 100, 20)
+top_n = st.sidebar.slider(
+    "Categorías a conservar (el resto → 'otros')", 5, 100, 20,
+    help="Cuántas categorías frecuentes conservar en las columnas de alta cardinalidad; "
+         "el resto se agrupa en 'otros'.")
 
 # ---------------------------------------------------------- 1. carga
 st.title("🌲 Panel de entrenamiento – Random Forest")
