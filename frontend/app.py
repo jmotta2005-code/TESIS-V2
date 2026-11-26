@@ -60,25 +60,29 @@ except Exception:  # noqa: BLE001
 # ------------------------------------------------------------ barra lateral
 st.sidebar.header("⚙️ Configuración")
 st.sidebar.subheader("Random Forest (sin búsqueda)")
-n_estimators = st.sidebar.slider("n_estimators", 10, 1000, 200, 10)
+n_estimators = st.sidebar.number_input("n_estimators", min_value=10, max_value=1000, value=200, step=10)
 max_depth_on = st.sidebar.checkbox("Limitar profundidad máxima", value=False)
-max_depth = st.sidebar.slider("max_depth", 2, 50, 10) if max_depth_on else None
-min_samples_split = st.sidebar.slider("min_samples_split", 2, 50, 2)
-min_samples_leaf = st.sidebar.slider("min_samples_leaf", 1, 50, 1)
+max_depth = (st.sidebar.number_input("max_depth", min_value=2, max_value=50, value=10, step=1)
+             if max_depth_on else None)
+min_samples_split = st.sidebar.number_input("min_samples_split", min_value=2, max_value=50, value=2, step=1)
+min_samples_leaf = st.sidebar.number_input("min_samples_leaf", min_value=1, max_value=50, value=1, step=1)
 _mf = {"sqrt": "sqrt", "log2": "log2", "0.5": 0.5, "todas (None)": None}
 max_features = _mf[st.sidebar.selectbox("max_features", list(_mf), index=0)]
 
 st.sidebar.subheader("Partición y validación")
-test_size = st.sidebar.slider("Tamaño del conjunto de prueba", 0.05, 0.5, 0.2, 0.05)
-n_splits = st.sidebar.slider("Folds de validación cruzada", 2, 10, 5)
+test_size = st.sidebar.number_input("Tamaño del conjunto de prueba", min_value=0.05, max_value=0.5,
+                                    value=0.2, step=0.05, format="%.2f")
+n_splits = st.sidebar.number_input("Folds de validación cruzada", min_value=2, max_value=10, value=5, step=1)
 random_state = int(st.sidebar.number_input("random_state", 0, 10_000, 42))
 
 st.sidebar.subheader("Variables categóricas")
-umbral_card = st.sidebar.slider("Alta cardinalidad: más de N categorías", 5, 200, 30)
+umbral_card = st.sidebar.number_input("Alta cardinalidad: más de N categorías",
+                                      min_value=5, max_value=200, value=30, step=1)
 modo_card_ui = st.sidebar.radio("Tratamiento de alta cardinalidad",
                                 ["Agrupar categorías raras en 'otros'", "Excluir esas columnas"])
 modo_card = "excluir" if modo_card_ui.startswith("Excluir") else "agrupar"
-top_n = st.sidebar.slider("Categorías a conservar (el resto → 'otros')", 5, 100, 20)
+top_n = st.sidebar.number_input("Categorías a conservar (el resto → 'otros')",
+                                min_value=5, max_value=100, value=20, step=1)
 
 # ---------------------------------------------------------- 1. carga
 st.title("🌲 Panel de entrenamiento – Random Forest")
@@ -301,6 +305,8 @@ if st.button("🚀 Entrenar y evaluar", type="primary"):
             r["nombre_score"] = nombre_score
             r["modelo_bytes"] = api.descargar_modelo(r["modelo_id"])
         st.session_state["resultado"] = r
+        st.session_state.pop("raster_pred", None)
+        st.session_state.pop("tif_info_clave", None)
     except Exception as e:  # noqa: BLE001
         st.error(f"{e}")
 
@@ -434,3 +440,92 @@ if res:
                                file_name="predicciones.csv", mime="text/csv")
         except Exception as e:  # noqa: BLE001
             st.error(f"{e}")
+
+    st.subheader("7️⃣ Predicción de salinidad sobre imagen TIFF")
+    st.caption("Revisa primero las métricas (por ejemplo el R²). El procesamiento del ráster "
+               "solo se ejecuta cuando pulsas el botón de predicción.")
+    tif = st.file_uploader("Imagen multiespectral (GeoTIFF)",
+                           type=["tif", "tiff"], key="file_tif")
+    if tif:
+        clave_tif = (tif.name, tif.size, res["modelo_id"])
+        if st.session_state.get("tif_info_clave") != clave_tif:
+            try:
+                with st.spinner("Leyendo el ráster..."):
+                    st.session_state["tif_info"] = api.raster_info(
+                        res["modelo_id"], tif.name, tif.getvalue())
+                st.session_state["tif_info_clave"] = clave_tif
+                st.session_state.pop("raster_pred", None)
+            except Exception as e:  # noqa: BLE001
+                st.error(f"{e}")
+        info_tif = st.session_state.get("tif_info")
+        if info_tif:
+            d1, d2, d3 = st.columns(3)
+            d1.metric("Ancho (px)", info_tif["ancho"])
+            d2.metric("Alto (px)", info_tif["alto"])
+            d3.metric("Bandas", info_tif["n_bandas"])
+            st.caption(f"CRS: {info_tif.get('crs') or 'sin georreferencia'} · "
+                       f"dtype: {info_tif.get('dtype')}")
+            st.write("Bandas detectadas: " + ", ".join(
+                f"**{b['nombre']}** (banda {b['indice']})" for b in info_tif["bandas"]))
+            if info_tif.get("faltan"):
+                st.warning("Faltan variables que el modelo necesita: "
+                           + ", ".join(info_tif["faltan"])
+                           + ". Puedes asignarlas en el mapeo manual de bandas.")
+
+            bandas = info_tif["bandas"]
+            with st.expander("Mapear bandas manualmente (si falta alguna o no se detectan)"):
+                st.caption("Asigna a cada banda del ráster el nombre que espera el modelo. "
+                           "Solo se envían los cambios.")
+                nombres_validos = ["(automático)"] + [f"B{i}" for i in range(1, 13)] + ["B8A"]
+                mapeo = {}
+                for b in bandas:
+                    sel = st.selectbox(
+                        f"Banda {b['indice']} (detectada: {b['nombre']})",
+                        nombres_validos, index=0, key=f"map_banda_{b['indice']}")
+                    if sel != "(automático)" and sel != b["nombre"]:
+                        mapeo[str(b["indice"])] = sel
+
+            st.caption("Usa imágenes con la misma escala de reflectancia que los datos de "
+                       "entrenamiento; si no, las predicciones perderán sentido.")
+            if st.button("🗺️ Predecir distribución de salinidad", type="primary"):
+                try:
+                    with st.spinner("Prediciendo píxel a píxel..."):
+                        st.session_state["raster_pred"] = api.predecir_raster(
+                            res["modelo_id"], tif.name, tif.getvalue(), mapeo or None)
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"{e}")
+
+        pred = st.session_state.get("raster_pred")
+        if pred:
+            st.header("🗺️ Mapa de salinidad predicha")
+            arr = np.array(pred["preview"], dtype=float)
+            fig, ax = plt.subplots(figsize=(7, 5))
+            im = ax.imshow(arr, cmap="YlOrBr")
+            fig.colorbar(im, ax=ax, label=pred.get("target") or "Predicción")
+            ax.set_xticks([])
+            ax.set_yticks([])
+            fig.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
+            st.caption(f"Vista previa submuestreada ({arr.shape[1]}×{arr.shape[0]} px). "
+                       f"Píxeles válidos: {pred['n_validos']}.")
+
+            s = pred["stats"]
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Mínimo", "n/d" if s["min"] is None else f"{s['min']:.3f}")
+            m2.metric("Media", "n/d" if s["media"] is None else f"{s['media']:.3f}")
+            m3.metric("Mediana", "n/d" if s["mediana"] is None else f"{s['mediana']:.3f}")
+            m4.metric("Máximo", "n/d" if s["max"] is None else f"{s['max']:.3f}")
+
+            if s.get("hist"):
+                e = np.array(s["hist"]["edges"])
+                fig2, ax2 = plt.subplots(figsize=(6, 3))
+                ax2.bar(e[:-1], s["hist"]["counts"], width=np.diff(e), align="edge", color="#8d6e63")
+                ax2.set_xlabel(pred.get("target") or "Salinidad predicha")
+                ax2.set_ylabel("Píxeles")
+                st.pyplot(fig2)
+                plt.close(fig2)
+
+            st.download_button("⬇️ Descargar GeoTIFF de salinidad",
+                               data=api.descargar_raster(pred["prediccion_id"]),
+                               file_name="salinidad_predicha.tif", mime="image/tiff")

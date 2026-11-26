@@ -1,4 +1,5 @@
 """Cliente HTTP del backend."""
+import json
 import os
 
 import requests
@@ -59,3 +60,21 @@ def predecir(mid, nombre, contenido):
     r = requests.post(f"{API_URL}/modelos/{mid}/predecir",
                       files={"archivo": (nombre, contenido)}, timeout=300)
     return _ok(r).json()
+
+
+def raster_info(mid, nombre, contenido, mapeo=None):
+    data = {"mapeo": json.dumps(mapeo)} if mapeo else {}
+    r = requests.post(f"{API_URL}/modelos/{mid}/raster/info",
+                      files={"archivo": (nombre, contenido)}, data=data, timeout=120)
+    return _ok(r).json()
+
+
+def predecir_raster(mid, nombre, contenido, mapeo=None):
+    data = {"mapeo": json.dumps(mapeo)} if mapeo else {}
+    r = requests.post(f"{API_URL}/modelos/{mid}/predecir_raster",
+                      files={"archivo": (nombre, contenido)}, data=data, timeout=None)
+    return _ok(r).json()
+
+
+def descargar_raster(pid):
+    return _ok(requests.get(f"{API_URL}/predicciones/{pid}/descargar", timeout=120)).content
