@@ -20,7 +20,6 @@ from pydantic import BaseModel
 
 import indices
 import ml_core as ml
-import raster
 
 app = FastAPI(title="Random Forest Trainer API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -28,7 +27,6 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 # Estado en memoria (suficiente para uso personal; se pierde al reiniciar).
 DATASETS: dict = {}
 MODELOS: dict = {}
-PREDICCIONES: dict = {}  # id -> bytes del GeoTIFF de salinidad generado
 
 
 # ------------------------------------------------------------------ helpers
@@ -218,55 +216,3 @@ def predecir(mid: str, archivo: UploadFile = File(...)):
     salida = df.copy()
     salida[f"prediccion_{m['target']}"] = preds
     return limpio({"preview": a_json(salida.head(50)), "csv": salida.to_csv(index=False)})
-
-
-@app.post("/modelos/{mid}/raster/info")
-def raster_info(mid: str, archivo: UploadFile = File(...), mapeo: Optional[str] = Form(None)):
-    """Metadatos del GeoTIFF y variables del modelo que faltan cubrir."""
-    m = MODELOS.get(mid)
-    if m is None:
-        raise HTTPException(404, "Modelo no encontrado.")
-    mapa = _mapeo(mapeo)
-    try:
-        contenido = archivo.file.read()
-        return limpio(raster.info_raster(contenido, features=m["features"], mapeo=mapa))
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f"No se pudo leer el ráster: {e}")
-
-
-@app.post("/modelos/{mid}/predecir_raster")
-def predecir_raster(mid: str, archivo: UploadFile = File(...), mapeo: Optional[str] = Form(None)):
-    """Predice el mapa completo de salinidad píxel a píxel sobre el GeoTIFF."""
-    m = MODELOS.get(mid)
-    if m is None:
-        raise HTTPException(404, "Modelo no encontrado.")
-    mapa = _mapeo(mapeo)
-    try:
-        contenido = archivo.file.read()
-        res = raster.predecir_raster(m, contenido, mapa)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f"No se pudo predecir sobre el ráster: {e}")
-    pid = uuid.uuid4().hex
-    PREDICCIONES[pid] = res.pop("geotiff")
-    res.update(prediccion_id=pid, target=m.get("target"))
-    return limpio(res)
-
-
-@app.get("/predicciones/{pid}/descargar")
-def descargar_prediccion(pid: str):
-    data = PREDICCIONES.get(pid)
-    if data is None:
-        raise HTTPException(404, "Predicción no encontrada.")
-    return Response(data, media_type="image/tiff")
-
-
-def _mapeo(texto: Optional[str]) -> Optional[dict]:
-    if not texto:
-        return None
-    try:
-        valor = json.loads(texto)
-    except json.JSONDecodeError:
-        raise HTTPException(400, "El mapeo de bandas no es un JSON válido.")
-    return valor if isinstance(valor, dict) else None

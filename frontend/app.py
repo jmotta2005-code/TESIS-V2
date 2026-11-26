@@ -3,6 +3,7 @@
 Ejecutar (desde la carpeta frontend):
     streamlit run app.py
 """
+import io
 import json
 
 import matplotlib.pyplot as plt
@@ -16,6 +17,16 @@ st.set_page_config(page_title="Random Forest Trainer", page_icon="🌲", layout=
 
 LBL = {"base": "Línea base (trivial)", "simple": "Modelo simple (logística / lineal)",
        "rf": "Random Forest"}
+
+COLS_X = ("x", "lon", "long", "longitud", "easting", "este", "coord_x", "coordenada_x")
+COLS_Y = ("y", "lat", "latitud", "northing", "norte", "coord_y", "coordenada_y")
+
+
+def detectar_coord(columnas, candidatas):
+    for c in columnas:
+        if str(c).strip().lower() in candidatas:
+            return c
+    return None
 
 
 def val(scoring, v):
@@ -336,8 +347,7 @@ if st.button("🚀 Entrenar y evaluar", type="primary"):
             r["nombre_score"] = nombre_score
             r["modelo_bytes"] = api.descargar_modelo(r["modelo_id"])
         st.session_state["resultado"] = r
-        st.session_state.pop("raster_pred", None)
-        st.session_state.pop("tif_info_clave", None)
+        st.session_state.pop("mapa_pred", None)
     except Exception as e:  # noqa: BLE001
         st.error(f"{e}")
 
@@ -472,91 +482,80 @@ if res:
         except Exception as e:  # noqa: BLE001
             st.error(f"{e}")
 
-    st.subheader("7️⃣ Predicción de salinidad sobre imagen TIFF")
-    st.caption("Revisa primero las métricas (por ejemplo el R²). El procesamiento del ráster "
-               "solo se ejecuta cuando pulsas el botón de predicción.")
-    tif = st.file_uploader("Imagen multiespectral (GeoTIFF)",
-                           type=["tif", "tiff"], key="file_tif")
-    if tif:
-        clave_tif = (tif.name, tif.size, res["modelo_id"])
-        if st.session_state.get("tif_info_clave") != clave_tif:
+    st.subheader("7️⃣ Mapa de salinidad desde CSV/Excel (coordenadas + bandas)")
+    st.caption("Sube un archivo con las columnas de coordenadas (x, y o lon, lat) y las bandas "
+               "espectrales B1–B12. Los índices derivados se calculan automáticamente; no hace "
+               "falta incluirlos. El procesamiento solo se ejecuta al pulsar el botón.")
+    archivo_mapa = st.file_uploader("CSV o Excel con coordenadas y bandas espectrales",
+                                    type=["csv", "xlsx", "xls"], key="file_mapa")
+    if archivo_mapa:
+        if st.button("🗺️ Predecir distribución de salinidad", type="primary"):
             try:
-                with st.spinner("Leyendo el ráster..."):
-                    st.session_state["tif_info"] = api.raster_info(
-                        res["modelo_id"], tif.name, tif.getvalue())
-                st.session_state["tif_info_clave"] = clave_tif
-                st.session_state.pop("raster_pred", None)
+                with st.spinner("Calculando la salinidad de cada punto..."):
+                    st.session_state["mapa_pred"] = api.predecir(
+                        res["modelo_id"], archivo_mapa.name, archivo_mapa.getvalue())
             except Exception as e:  # noqa: BLE001
                 st.error(f"{e}")
-        info_tif = st.session_state.get("tif_info")
-        if info_tif:
-            d1, d2, d3 = st.columns(3)
-            d1.metric("Ancho (px)", info_tif["ancho"])
-            d2.metric("Alto (px)", info_tif["alto"])
-            d3.metric("Bandas", info_tif["n_bandas"])
-            st.caption(f"CRS: {info_tif.get('crs') or 'sin georreferencia'} · "
-                       f"dtype: {info_tif.get('dtype')}")
-            st.write("Bandas detectadas: " + ", ".join(
-                f"**{b['nombre']}** (banda {b['indice']})" for b in info_tif["bandas"]))
-            if info_tif.get("faltan"):
-                st.warning("Faltan variables que el modelo necesita: "
-                           + ", ".join(info_tif["faltan"])
-                           + ". Puedes asignarlas en el mapeo manual de bandas.")
 
-            bandas = info_tif["bandas"]
-            with st.expander("Mapear bandas manualmente (si falta alguna o no se detectan)"):
-                st.caption("Asigna a cada banda del ráster el nombre que espera el modelo. "
-                           "Solo se envían los cambios.")
-                nombres_validos = ["(automático)"] + [f"B{i}" for i in range(1, 13)] + ["B8A"]
-                mapeo = {}
-                for b in bandas:
-                    sel = st.selectbox(
-                        f"Banda {b['indice']} (detectada: {b['nombre']})",
-                        nombres_validos, index=0, key=f"map_banda_{b['indice']}")
-                    if sel != "(automático)" and sel != b["nombre"]:
-                        mapeo[str(b["indice"])] = sel
+        out = st.session_state.get("mapa_pred")
+        if out:
+            try:
+                df_pred = pd.read_csv(io.StringIO(out["csv"]))
+            except Exception as e:  # noqa: BLE001
+                st.error(f"No se pudo interpretar el resultado: {e}")
+                df_pred = None
+            if df_pred is not None:
+                col_pred = next((c for c in df_pred.columns
+                                 if str(c).startswith("prediccion_")), None)
+                if col_pred is None:
+                    st.error("No se encontró la columna de predicción en el resultado.")
+                else:
+                    st.dataframe(df_pred.head(50))
+                    columnas = list(df_pred.columns)
+                    def_x = detectar_coord(columnas, COLS_X)
+                    def_y = detectar_coord(columnas, COLS_Y)
+                    idx_x = columnas.index(def_x) if def_x is not None else 0
+                    idx_y = (columnas.index(def_y) if def_y is not None
+                             else min(1, len(columnas) - 1))
+                    cx, cy = st.columns(2)
+                    col_x = cx.selectbox("Columna X / longitud", columnas, index=idx_x)
+                    col_y = cy.selectbox("Columna Y / latitud", columnas, index=idx_y)
+                    sub = (df_pred[[col_x, col_y, col_pred]]
+                           .apply(pd.to_numeric, errors="coerce").dropna())
+                    if len(sub) == 0:
+                        st.warning("No hay filas con coordenadas y predicción válidas "
+                                   "para dibujar el mapa.")
+                    else:
+                        interpolar = st.checkbox("Interpolar mapa (curvas de nivel)", value=False)
+                        fig, ax = plt.subplots(figsize=(7, 6))
+                        if interpolar and len(sub) >= 4:
+                            try:
+                                tcf = ax.tricontourf(sub[col_x], sub[col_y], sub[col_pred],
+                                                     levels=20, cmap="YlOrBr")
+                                fig.colorbar(tcf, ax=ax, label=col_pred)
+                            except Exception:  # noqa: BLE001
+                                ax.clear()
+                                interpolar = False
+                        if not interpolar:
+                            sc = ax.scatter(sub[col_x], sub[col_y], c=sub[col_pred],
+                                            cmap="YlOrBr", s=18)
+                            fig.colorbar(sc, ax=ax, label=col_pred)
+                        ax.set_xlabel(str(col_x))
+                        ax.set_ylabel(str(col_y))
+                        ax.set_aspect("equal", adjustable="datalim")
+                        fig.tight_layout()
+                        st.pyplot(fig)
+                        plt.close(fig)
 
-            st.caption("Usa imágenes con la misma escala de reflectancia que los datos de "
-                       "entrenamiento; si no, las predicciones perderán sentido.")
-            if st.button("🗺️ Predecir distribución de salinidad", type="primary"):
-                try:
-                    with st.spinner("Prediciendo píxel a píxel..."):
-                        st.session_state["raster_pred"] = api.predecir_raster(
-                            res["modelo_id"], tif.name, tif.getvalue(), mapeo or None)
-                except Exception as e:  # noqa: BLE001
-                    st.error(f"{e}")
+                        s = sub[col_pred]
+                        m1, m2, m3, m4 = st.columns(4)
+                        m1.metric("Mínimo", f"{s.min():.3f}")
+                        m2.metric("Media", f"{s.mean():.3f}")
+                        m3.metric("Mediana", f"{s.median():.3f}")
+                        m4.metric("Máximo", f"{s.max():.3f}")
+                        st.caption(f"Puntos mostrados: {len(sub)} · variable predicha: "
+                                   f"{col_pred.replace('prediccion_', '')}")
 
-        pred = st.session_state.get("raster_pred")
-        if pred:
-            st.header("🗺️ Mapa de salinidad predicha")
-            arr = np.array(pred["preview"], dtype=float)
-            fig, ax = plt.subplots(figsize=(7, 5))
-            im = ax.imshow(arr, cmap="YlOrBr")
-            fig.colorbar(im, ax=ax, label=pred.get("target") or "Predicción")
-            ax.set_xticks([])
-            ax.set_yticks([])
-            fig.tight_layout()
-            st.pyplot(fig)
-            plt.close(fig)
-            st.caption(f"Vista previa submuestreada ({arr.shape[1]}×{arr.shape[0]} px). "
-                       f"Píxeles válidos: {pred['n_validos']}.")
-
-            s = pred["stats"]
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Mínimo", "n/d" if s["min"] is None else f"{s['min']:.3f}")
-            m2.metric("Media", "n/d" if s["media"] is None else f"{s['media']:.3f}")
-            m3.metric("Mediana", "n/d" if s["mediana"] is None else f"{s['mediana']:.3f}")
-            m4.metric("Máximo", "n/d" if s["max"] is None else f"{s['max']:.3f}")
-
-            if s.get("hist"):
-                e = np.array(s["hist"]["edges"])
-                fig2, ax2 = plt.subplots(figsize=(6, 3))
-                ax2.bar(e[:-1], s["hist"]["counts"], width=np.diff(e), align="edge", color="#8d6e63")
-                ax2.set_xlabel(pred.get("target") or "Salinidad predicha")
-                ax2.set_ylabel("Píxeles")
-                st.pyplot(fig2)
-                plt.close(fig2)
-
-            st.download_button("⬇️ Descargar GeoTIFF de salinidad",
-                               data=api.descargar_raster(pred["prediccion_id"]),
-                               file_name="salinidad_predicha.tif", mime="image/tiff")
+                    st.download_button("⬇️ Descargar predicciones (CSV)",
+                                       data=out["csv"].encode("utf-8"),
+                                       file_name="salinidad_predicha.csv", mime="text/csv")

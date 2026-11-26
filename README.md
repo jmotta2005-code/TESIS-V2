@@ -169,26 +169,23 @@ descargable.
 > Los datos nuevos deben tener una distribución parecida a la del entrenamiento. Si cambian con
 > el tiempo, conviene reentrenar.
 
-### Paso 7 — Predecir la distribución de salinidad sobre un TIFF
+### Paso 7 — Mapa de salinidad desde un CSV/Excel (coordenadas + bandas)
 
 Después de revisar las métricas (por ejemplo el **R²**) y si el modelo te convence, puedes
-generar el **mapa de salinidad** de una imagen completa:
+generar el **mapa de salinidad** de un conjunto de puntos:
 
-1. Subir una **imagen multiespectral GeoTIFF** (`.tif` / `.tiff`) en la sección
-   **"7️⃣ Predicción de salinidad sobre imagen TIFF"**.
-2. El sistema muestra el tamaño, el CRS y las **bandas detectadas por su metadata**
-   (`B1`, `B2`, ..., `B12`, `B8A`). Avisa si falta alguna variable que el modelo necesita.
-3. Si las bandas no se detectan bien, abrir **"Mapear bandas manualmente"** y asignar a cada
-   banda del ráster el nombre que espera el modelo.
-4. Pulsar **"🗺️ Predecir distribución de salinidad"**. El procesamiento pesado solo se ejecuta
-   aquí, no antes.
-5. Se muestra el **mapa coloreado**, estadísticas (mínimo, media, mediana, máximo e histograma)
-   y un botón para **descargar el GeoTIFF de salinidad** (`salinidad_predicha.tif`), que conserva
-   la georreferencia (CRS y transformación) de la imagen original.
+1. Subir un **CSV o Excel** con columnas de **coordenadas** (`x`, `y` o `lon`, `lat`) y las
+   **bandas espectrales** (`B1`, `B2`, ..., `B12`). **No** hace falta incluir los índices
+   derivados: el sistema los calcula automáticamente a partir de las bandas.
+2. Pulsar **"🗺️ Predecir distribución de salinidad"**. El procesamiento solo se ejecuta al
+   pulsar el botón, no antes.
+3. El sistema muestra la tabla con las predicciones, un **mapa de puntos coloreado** por
+   salinidad (con opción de interpolar curvas de nivel) y estadísticas (mínimo, media, mediana y
+   máximo).
+4. Descargar las predicciones con **"⬇️ Descargar predicciones (CSV)"**.
 
-> Usa imágenes con la **misma escala de reflectancia** que los datos de entrenamiento
-> (por ejemplo, ambas en 0–1 o ambas en 0–10000). Si no coinciden, las predicciones no tendrán
-> sentido.
+> Usa datos con la **misma escala de reflectancia** que los de entrenamiento (por ejemplo,
+> ambas en 0–1 o ambas en 0–10000). Si no coinciden, las predicciones no tendrán sentido.
 
 ---
 
@@ -213,7 +210,6 @@ TESIS-V2/
 │   ├── main.py            # API FastAPI (endpoints)
 │   ├── ml_core.py         # Lógica de ML (lectura, preparación, entrenamiento)
 │   ├── indices.py         # Cálculo de índices espectrales
-│   ├── raster.py          # Lectura de GeoTIFF y predicción por píxel
 │   └── requirements.txt
 ├── frontend/
 │   ├── app.py             # Interfaz Streamlit
