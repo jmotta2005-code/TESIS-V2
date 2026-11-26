@@ -500,17 +500,21 @@ if res:
             st.error(f"{e}")
 
     st.subheader("7️⃣ Mapa de salinidad desde CSV/Excel (coordenadas + bandas)")
-    st.caption("Sube un archivo con las columnas de coordenadas (x, y o lon, lat) y las bandas "
-               "espectrales B1–B12. Los índices derivados se calculan automáticamente; no hace "
-               "falta incluirlos. El procesamiento solo se ejecuta al pulsar el botón.")
-    archivo_mapa = st.file_uploader("CSV o Excel con coordenadas y bandas espectrales",
-                                    type=["csv", "xlsx", "xls"], key="file_mapa")
-    if archivo_mapa:
+    st.caption("Puedes subir uno o varios archivos (por ejemplo, los CSV separados de Google "
+               "Earth Engine). Se concatenan y ordenan por coordenadas automáticamente. Cada "
+               "archivo debe traer coordenadas (x, y o lon, lat) y las bandas B1–B12; los "
+               "índices se calculan solos. El procesamiento solo se ejecuta al pulsar el botón.")
+    archivos_mapa = st.file_uploader("CSV o Excel con coordenadas y bandas espectrales",
+                                     type=["csv", "xlsx", "xls"], key="file_mapa",
+                                     accept_multiple_files=True)
+    if archivos_mapa:
+        st.caption(f"{len(archivos_mapa)} archivo(s) cargado(s): "
+                   + ", ".join(a.name for a in archivos_mapa))
         if st.button("🗺️ Predecir distribución de salinidad", type="primary"):
             try:
-                with st.spinner("Calculando la salinidad de cada punto..."):
-                    st.session_state["mapa_pred"] = api.predecir(
-                        res["modelo_id"], archivo_mapa.name, archivo_mapa.getvalue())
+                with st.spinner("Uniendo archivos y calculando la salinidad..."):
+                    st.session_state["mapa_pred"] = api.predecir_varios(
+                        res["modelo_id"], archivos_mapa)
             except Exception as e:  # noqa: BLE001
                 st.error(f"{e}")
 

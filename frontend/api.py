@@ -59,3 +59,9 @@ def predecir(mid, nombre, contenido):
     r = requests.post(f"{API_URL}/modelos/{mid}/predecir",
                       files={"archivo": (nombre, contenido)}, timeout=300)
     return _ok(r).json()
+
+
+def predecir_varios(mid, archivos):
+    files = [("archivos", (a.name, a.getvalue())) for a in archivos]
+    r = requests.post(f"{API_URL}/modelos/{mid}/predecir_varios", files=files, timeout=None)
+    return _ok(r).json()

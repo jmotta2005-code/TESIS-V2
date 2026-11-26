@@ -7,6 +7,7 @@ Documentación interactiva: http://127.0.0.1:8000/docs
 import io
 import json
 import math
+import re
 import uuid
 from typing import Optional
 
@@ -47,6 +48,42 @@ def limpio(o):
 
 def a_json(df: pd.DataFrame):
     return json.loads(df.to_json(orient="records"))
+
+
+COLS_X = ("x", "lon", "long", "longitud", "easting", "este", "coord_x", "coordenada_x")
+COLS_Y = ("y", "lat", "latitud", "northing", "norte", "coord_y", "coordenada_y")
+
+
+def _natural(s: str):
+    return [int(t) if t.isdigit() else str(t).lower() for t in re.split(r"(\d+)", s or "")]
+
+
+def _detectar_coord(columnas, candidatas):
+    for c in columnas:
+        if str(c).strip().lower() in candidatas:
+            return c
+    return None
+
+
+def _leer_varios(archivos) -> pd.DataFrame:
+    """Lee y concatena varios CSV/Excel, deduplicando y ordenando por coordenadas."""
+    frames = []
+    for a in sorted(archivos, key=lambda f: _natural(f.filename)):
+        try:
+            frames.append(ml.leer_archivo(a.file.read(), a.filename))
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(400, f"No se pudo leer '{a.filename}': {e}")
+    if not frames:
+        raise HTTPException(400, "No se recibió ningún archivo.")
+    datos = pd.concat(frames, ignore_index=True).drop_duplicates().reset_index(drop=True)
+    col_x = _detectar_coord(datos.columns, COLS_X)
+    col_y = _detectar_coord(datos.columns, COLS_Y)
+    if col_x is not None and col_y is not None:
+        try:
+            datos = datos.sort_values([col_y, col_x], kind="stable").reset_index(drop=True)
+        except Exception:  # noqa: BLE001
+            pass
+    return datos
 
 
 # ------------------------------------------------------------------ esquemas
@@ -216,3 +253,24 @@ def predecir(mid: str, archivo: UploadFile = File(...)):
     salida = df.copy()
     salida[f"prediccion_{m['target']}"] = preds
     return limpio({"preview": a_json(salida.head(50)), "csv": salida.to_csv(index=False)})
+
+
+@app.post("/modelos/{mid}/predecir_varios")
+def predecir_varios(mid: str, archivos: list[UploadFile] = File(...)):
+    """Predice sobre varios CSV/Excel, concatenándolos y ordenándolos por coordenadas."""
+    m = MODELOS.get(mid)
+    if m is None:
+        raise HTTPException(404, "Modelo no encontrado.")
+    df = _leer_varios(archivos)
+    df, _ = indices.agregar_indices_espectrales(df)
+    faltan = [c for c in m["features"] if c not in df.columns]
+    if faltan:
+        raise HTTPException(400, f"Faltan columnas en los archivos nuevos: {faltan}")
+    try:
+        preds = m["pipeline"].predict(ml.preparar_X(df[m["features"]]))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"No se pudo predecir: {e}")
+    salida = df.copy()
+    salida[f"prediccion_{m['target']}"] = preds
+    return limpio({"preview": a_json(salida.head(50)), "csv": salida.to_csv(index=False),
+                   "n_filas": len(salida)})

@@ -174,9 +174,11 @@ descargable.
 Después de revisar las métricas (por ejemplo el **R²**) y si el modelo te convence, puedes
 generar el **mapa de salinidad** de un conjunto de puntos:
 
-1. Subir un **CSV o Excel** con columnas de **coordenadas** (`x`, `y` o `lon`, `lat`) y las
-   **bandas espectrales** (`B1`, `B2`, ..., `B12`). **No** hace falta incluir los índices
-   derivados: el sistema los calcula automáticamente a partir de las bandas.
+1. Subir uno o **varios CSV o Excel** con columnas de **coordenadas** (`x`, `y` o `lon`, `lat`)
+   y las **bandas espectrales** (`B1`, `B2`, ..., `B12`). Útil cuando la exportación de Google
+   Earth Engine se parte en varios archivos: se **concatenan y ordenan por coordenadas**
+   automáticamente. **No** hace falta incluir los índices derivados: el sistema los calcula
+   automáticamente a partir de las bandas.
 2. Pulsar **"🗺️ Predecir distribución de salinidad"**. El procesamiento solo se ejecuta al
    pulsar el botón, no antes.
 3. El sistema muestra la tabla con las predicciones, un **mapa de temperatura** de la
