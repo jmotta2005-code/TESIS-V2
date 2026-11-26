@@ -60,29 +60,25 @@ except Exception:  # noqa: BLE001
 # ------------------------------------------------------------ barra lateral
 st.sidebar.header("⚙️ Configuración")
 st.sidebar.subheader("Random Forest (sin búsqueda)")
-n_estimators = st.sidebar.number_input("n_estimators", min_value=10, max_value=1000, value=200, step=10)
+n_estimators = st.sidebar.slider("n_estimators", 10, 1000, 200, 10)
 max_depth_on = st.sidebar.checkbox("Limitar profundidad máxima", value=False)
-max_depth = (st.sidebar.number_input("max_depth", min_value=2, max_value=50, value=10, step=1)
-             if max_depth_on else None)
-min_samples_split = st.sidebar.number_input("min_samples_split", min_value=2, max_value=50, value=2, step=1)
-min_samples_leaf = st.sidebar.number_input("min_samples_leaf", min_value=1, max_value=50, value=1, step=1)
+max_depth = st.sidebar.slider("max_depth", 2, 50, 10) if max_depth_on else None
+min_samples_split = st.sidebar.slider("min_samples_split", 2, 50, 2)
+min_samples_leaf = st.sidebar.slider("min_samples_leaf", 1, 50, 1)
 _mf = {"sqrt": "sqrt", "log2": "log2", "0.5": 0.5, "todas (None)": None}
 max_features = _mf[st.sidebar.selectbox("max_features", list(_mf), index=0)]
 
 st.sidebar.subheader("Partición y validación")
-test_size = st.sidebar.number_input("Tamaño del conjunto de prueba", min_value=0.05, max_value=0.5,
-                                    value=0.2, step=0.05, format="%.2f")
-n_splits = st.sidebar.number_input("Folds de validación cruzada", min_value=2, max_value=10, value=5, step=1)
+test_size = st.sidebar.slider("Tamaño del conjunto de prueba", 0.05, 0.5, 0.2, 0.05)
+n_splits = st.sidebar.slider("Folds de validación cruzada", 2, 10, 5)
 random_state = int(st.sidebar.number_input("random_state", 0, 10_000, 42))
 
 st.sidebar.subheader("Variables categóricas")
-umbral_card = st.sidebar.number_input("Alta cardinalidad: más de N categorías",
-                                      min_value=5, max_value=200, value=30, step=1)
+umbral_card = st.sidebar.slider("Alta cardinalidad: más de N categorías", 5, 200, 30)
 modo_card_ui = st.sidebar.radio("Tratamiento de alta cardinalidad",
                                 ["Agrupar categorías raras en 'otros'", "Excluir esas columnas"])
 modo_card = "excluir" if modo_card_ui.startswith("Excluir") else "agrupar"
-top_n = st.sidebar.number_input("Categorías a conservar (el resto → 'otros')",
-                                min_value=5, max_value=100, value=20, step=1)
+top_n = st.sidebar.slider("Categorías a conservar (el resto → 'otros')", 5, 100, 20)
 
 # ---------------------------------------------------------- 1. carga
 st.title("🌲 Panel de entrenamiento – Random Forest")
