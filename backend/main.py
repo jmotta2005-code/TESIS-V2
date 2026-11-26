@@ -174,8 +174,6 @@ def entrenar(did: str, cfg: TrainConfig):
     X, y, _ = _datos(did, cfg)
     if not cfg.es_clf and not pd.api.types.is_numeric_dtype(y):
         raise HTTPException(400, "Para regresión el target debe ser numérico.")
-    if len(X) < 30:
-        raise HTTPException(400, "Hay muy pocas filas (menos de 30) para entrenar y validar.")
     try:
         res = ml.entrenar_y_evaluar(X, y, cfg.es_clf, cfg.model_dump())
     except Exception as e:  # noqa: BLE001

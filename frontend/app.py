@@ -192,9 +192,6 @@ tipo = st.radio("Tipo de problema", ["Clasificación", "Regresión"],
                 index=0 if info["sugerido_clf"] else 1, horizontal=True)
 es_clf = tipo == "Clasificación"
 
-if info["n_filas"] < 30:
-    st.error("Hay muy pocas filas (menos de 30) para entrenar y validar de forma fiable.")
-    st.stop()
 st.write(f"**{info['n_filas']}** filas · **{info['n_vars']}** variables · "
          + (f"**{info['n_clases']}** clases" if es_clf else "target continuo"))
 
