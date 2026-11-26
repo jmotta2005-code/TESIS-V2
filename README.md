@@ -179,8 +179,8 @@ generar el **mapa de salinidad** de un conjunto de puntos:
    derivados: el sistema los calcula automáticamente a partir de las bandas.
 2. Pulsar **"🗺️ Predecir distribución de salinidad"**. El procesamiento solo se ejecuta al
    pulsar el botón, no antes.
-3. El sistema muestra la tabla con las predicciones, un **mapa de puntos coloreado** por
-   salinidad (con opción de interpolar curvas de nivel) y estadísticas (mínimo, media, mediana y
+3. El sistema muestra la tabla con las predicciones, un **mapa de temperatura** de la
+   salinidad (**azul = valor bajo, rojo = valor alto**) y estadísticas (mínimo, media, mediana y
    máximo).
 4. Descargar las predicciones con **"⬇️ Descargar predicciones (CSV)"**.
 

@@ -405,10 +405,15 @@ if res:
         st.caption("El score de CV es algo optimista; el de Test es la referencia más honesta.")
 
     st.subheader("Detalle del Random Forest en el conjunto de prueba")
+    filas_stats = [
+        {"Estadístico": "Filas train / test", "Valor": f"{res['n_train']} / {res['n_test']}"},
+        {"Estadístico": f"{nombre_sc} – Train (CV)",
+         "Valor": f"{val(sc, rf['train_mean']):.4f}"},
+        {"Estadístico": f"{nombre_sc} – Validación (CV)",
+         "Valor": f"{val(sc, rf['cv_mean']):.4f} ± {rf['cv_std']:.4f}"},
+        {"Estadístico": f"{nombre_sc} – Test", "Valor": f"{val(sc, rf['test']):.4f}"},
+    ]
     if res["es_clf"]:
-        met = res["met_clf"]
-        for col, (k, v) in zip(st.columns(len(met)), met.items()):
-            col.metric(k, "n/d" if v is None else f"{v:.3f}")
         g1, g2 = st.columns(2)
         with g1:
             st.write("**Matriz de confusión**")
@@ -428,24 +433,36 @@ if res:
             st.pyplot(fig)
             plt.close(fig)
         with g2:
-            st.write("**Reporte por clase** (precision, recall y F1)")
-            st.dataframe(pd.DataFrame(res["reporte"]).T.round(3))
+            st.write("**Estadísticos de rendimiento (test)**")
+            filas = [{"Estadístico": k, "Valor": "n/d" if v is None else f"{v:.4f}"}
+                     for k, v in res["met_clf"].items()]
+            st.dataframe(pd.DataFrame(filas + filas_stats), hide_index=True,
+                         use_container_width=True)
+        st.write("**Reporte por clase** (precision, recall y F1)")
+        st.dataframe(pd.DataFrame(res["reporte"]).T.round(3))
     else:
         r_ = res["reg"]
-        m1, m2, m3 = st.columns(3)
-        m1.metric("R²", f"{r_['r2']:.3f}")
-        m2.metric("RMSE", f"{r_['rmse']:.3f}")
-        m3.metric("MAE", f"{r_['mae']:.3f}")
-        st.write("**Real vs. predicho**")
-        real, pred = np.array(res["real"]), np.array(res["pred"])
-        fig, ax = plt.subplots(figsize=(5, 4))
-        ax.scatter(real, pred, alpha=0.6)
-        lim = [min(real.min(), pred.min()), max(real.max(), pred.max())]
-        ax.plot(lim, lim, "r--")
-        ax.set_xlabel("Real")
-        ax.set_ylabel("Predicho")
-        st.pyplot(fig)
-        plt.close(fig)
+        g1, g2 = st.columns([3, 2])
+        with g1:
+            st.write("**Real vs. predicho**")
+            real, pred = np.array(res["real"]), np.array(res["pred"])
+            fig, ax = plt.subplots(figsize=(5, 4))
+            ax.scatter(real, pred, alpha=0.6)
+            lim = [min(real.min(), pred.min()), max(real.max(), pred.max())]
+            ax.plot(lim, lim, "r--")
+            ax.set_xlabel("Real")
+            ax.set_ylabel("Predicho")
+            st.pyplot(fig)
+            plt.close(fig)
+        with g2:
+            st.write("**Estadísticos de rendimiento (test)**")
+            filas = [
+                {"Estadístico": "R²", "Valor": f"{r_['r2']:.4f}"},
+                {"Estadístico": "RMSE", "Valor": f"{r_['rmse']:.4f}"},
+                {"Estadístico": "MAE", "Valor": f"{r_['mae']:.4f}"},
+            ]
+            st.dataframe(pd.DataFrame(filas + filas_stats), hide_index=True,
+                         use_container_width=True)
 
     st.subheader("Importancia de variables")
     i1, i2 = st.columns(2)
@@ -526,19 +543,24 @@ if res:
                         st.warning("No hay filas con coordenadas y predicción válidas "
                                    "para dibujar el mapa.")
                     else:
-                        interpolar = st.checkbox("Interpolar mapa (curvas de nivel)", value=False)
+                        vmin = float(sub[col_pred].min())
+                        vmax = float(sub[col_pred].max())
                         fig, ax = plt.subplots(figsize=(7, 6))
-                        if interpolar and len(sub) >= 4:
+                        dibujado = False
+                        if (len(sub) >= 4 and vmax > vmin
+                                and sub[[col_x, col_y]].drop_duplicates().shape[0] >= 3):
                             try:
+                                niveles = np.linspace(vmin, vmax, 51)
                                 tcf = ax.tricontourf(sub[col_x], sub[col_y], sub[col_pred],
-                                                     levels=20, cmap="YlOrBr")
+                                                     levels=niveles, cmap="RdYlBu_r",
+                                                     vmin=vmin, vmax=vmax)
                                 fig.colorbar(tcf, ax=ax, label=col_pred)
+                                dibujado = True
                             except Exception:  # noqa: BLE001
                                 ax.clear()
-                                interpolar = False
-                        if not interpolar:
+                        if not dibujado:
                             sc = ax.scatter(sub[col_x], sub[col_y], c=sub[col_pred],
-                                            cmap="YlOrBr", s=18)
+                                            cmap="RdYlBu_r", vmin=vmin, vmax=vmax, s=30)
                             fig.colorbar(sc, ax=ax, label=col_pred)
                         ax.set_xlabel(str(col_x))
                         ax.set_ylabel(str(col_y))
@@ -546,6 +568,8 @@ if res:
                         fig.tight_layout()
                         st.pyplot(fig)
                         plt.close(fig)
+                        st.caption("Mapa de temperatura: azul = salinidad baja · "
+                                   "rojo = salinidad alta.")
 
                         s = sub[col_pred]
                         m1, m2, m3, m4 = st.columns(4)
@@ -553,7 +577,7 @@ if res:
                         m2.metric("Media", f"{s.mean():.3f}")
                         m3.metric("Mediana", f"{s.median():.3f}")
                         m4.metric("Máximo", f"{s.max():.3f}")
-                        st.caption(f"Puntos mostrados: {len(sub)} · variable predicha: "
+                        st.caption(f"Puntos usados: {len(sub)} · variable predicha: "
                                    f"{col_pred.replace('prediccion_', '')}")
 
                     st.download_button("⬇️ Descargar predicciones (CSV)",
