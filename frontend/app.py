@@ -29,6 +29,32 @@ def detectar_coord(columnas, candidatas):
     return None
 
 
+def a_numero(v):
+    """Convierte valores con separadores de miles (p. ej. -7.212.847.6) a número."""
+    if isinstance(v, (int, float, np.integer, np.floating)):
+        return float(v)
+    v = str(v).strip().replace(" ", "")
+    if v == "" or v.lower() in ("nan", "none", "null"):
+        return np.nan
+    try:
+        return float(v)
+    except ValueError:
+        pass
+    if "," in v and "." in v:
+        if v.rfind(",") > v.rfind("."):
+            v = v.replace(".", "").replace(",", ".")
+        else:
+            v = v.replace(",", "")
+    elif "," in v:
+        v = v.replace(",", "") if v.count(",") > 1 else v.replace(",", ".")
+    elif v.count(".") > 1:
+        v = v.replace(".", "")
+    try:
+        return float(v)
+    except ValueError:
+        return np.nan
+
+
 def val(scoring, v):
     return -v if scoring.startswith("neg_") else v
 
@@ -541,8 +567,11 @@ if res:
                     cx, cy = st.columns(2)
                     col_x = cx.selectbox("Columna X / longitud", columnas, index=idx_x)
                     col_y = cy.selectbox("Columna Y / latitud", columnas, index=idx_y)
-                    sub = (df_pred[[col_x, col_y, col_pred]]
-                           .apply(pd.to_numeric, errors="coerce").dropna())
+                    sub = df_pred[[col_x, col_y, col_pred]].copy()
+                    sub[col_x] = sub[col_x].map(a_numero)
+                    sub[col_y] = sub[col_y].map(a_numero)
+                    sub[col_pred] = pd.to_numeric(sub[col_pred], errors="coerce")
+                    sub = sub.dropna()
                     if len(sub) == 0:
                         st.warning("No hay filas con coordenadas y predicción válidas "
                                    "para dibujar el mapa.")

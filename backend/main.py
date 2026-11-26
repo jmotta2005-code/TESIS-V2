@@ -65,6 +65,32 @@ def _detectar_coord(columnas, candidatas):
     return None
 
 
+def _num(v):
+    """Convierte valores con separadores de miles (p. ej. -7.212.847.6) a número."""
+    if isinstance(v, (int, float, np.integer, np.floating)):
+        return float(v)
+    v = str(v).strip().replace(" ", "")
+    if v == "" or v.lower() in ("nan", "none", "null"):
+        return np.nan
+    try:
+        return float(v)
+    except ValueError:
+        pass
+    if "," in v and "." in v:
+        if v.rfind(",") > v.rfind("."):
+            v = v.replace(".", "").replace(",", ".")
+        else:
+            v = v.replace(",", "")
+    elif "," in v:
+        v = v.replace(",", "") if v.count(",") > 1 else v.replace(",", ".")
+    elif v.count(".") > 1:
+        v = v.replace(".", "")
+    try:
+        return float(v)
+    except ValueError:
+        return np.nan
+
+
 def _leer_varios(archivos) -> pd.DataFrame:
     """Lee y concatena varios CSV/Excel, deduplicando y ordenando por coordenadas."""
     frames = []
@@ -80,6 +106,8 @@ def _leer_varios(archivos) -> pd.DataFrame:
     col_y = _detectar_coord(datos.columns, COLS_Y)
     if col_x is not None and col_y is not None:
         try:
+            datos[col_x] = datos[col_x].map(_num)
+            datos[col_y] = datos[col_y].map(_num)
             datos = datos.sort_values([col_y, col_x], kind="stable").reset_index(drop=True)
         except Exception:  # noqa: BLE001
             pass
