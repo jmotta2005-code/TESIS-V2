@@ -60,17 +60,17 @@ except Exception:  # noqa: BLE001
 # ------------------------------------------------------------ barra lateral
 st.sidebar.header("⚙️ Configuración")
 st.sidebar.subheader("Random Forest (sin búsqueda)")
-n_estimators = st.sidebar.slider("n_estimators", 10, 1000, 200, 10)
+n_estimators = st.sidebar.slider("n_estimators", 10, 1000, 10, 10)
 max_depth_on = st.sidebar.checkbox("Limitar profundidad máxima", value=False)
 max_depth = st.sidebar.slider("max_depth", 2, 50, 10) if max_depth_on else None
-min_samples_split = st.sidebar.slider("min_samples_split", 2, 50, 2)
-min_samples_leaf = st.sidebar.slider("min_samples_leaf", 1, 50, 1)
+min_samples_split = st.sidebar.slider("min_samples_split", 2, 50, 4)
+min_samples_leaf = st.sidebar.slider("min_samples_leaf", 1, 50, 2)
 _mf = {"sqrt": "sqrt", "log2": "log2", "0.5": 0.5, "todas (None)": None}
 max_features = _mf[st.sidebar.selectbox("max_features", list(_mf), index=0)]
 
 st.sidebar.subheader("Partición y validación")
-test_size = st.sidebar.slider("Tamaño del conjunto de prueba", 0.05, 0.5, 0.2, 0.05)
-n_splits = st.sidebar.slider("Folds de validación cruzada", 2, 10, 5)
+test_size = st.sidebar.slider("Tamaño del conjunto de prueba", 0.05, 0.5, 0.25, 0.05)
+n_splits = st.sidebar.slider("Folds de validación cruzada", 2, 10, 3)
 random_state = int(st.sidebar.number_input("random_state", 0, 10_000, 42))
 
 st.sidebar.subheader("Variables categóricas")
